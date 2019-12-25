@@ -1,0 +1,28 @@
+we have multiple possible levels to consider, but let's just get the first level down first (so we're just thinking in terms of a literal TM)
+
+program => expr*
+
+expr => label |
+		ConditionalExpr(BooleanExpr,Expr*) |
+		Movement |
+		Scan(Movement,BooleanExpr) |
+		Write(StrExpr,Movement?) |
+		Goto(string) |
+		accept |
+		reject
+
+label => :<string>
+BooleanExpr => Equal(StrExpr) |
+				NotEqual(StrExpr) |
+				BooleanOrExpr(BooleanExpr,BooleanExpr+) |
+				BooleanAndExpr(BooleanExpr,BooleanExpr+) |
+				BooleanNotExpr(BooleanExpr) |
+				Begin |
+				End |
+				BooleanTrue |
+				BooleanFalse
+movement => L|R
+
+StrExpr => String(string) |
+			Blank |
+			(other predefined?)

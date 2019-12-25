@@ -1,0 +1,113 @@
+palindromes in {a,b}:
+
+:entry
+(== 'aR') or (== 'bR')
+	L
+	goto equality
+== 'a'
+	write 'aL' R
+== 'b'
+	write 'bL' R
+scan R until (end) or (== 'aR') or (== 'bR')
+L
+== 'a'
+	write 'aR' L
+== 'b'
+	write 'aR' L
+scan L until (== 'aL') or (== 'bL')
+R
+goto entry
+
+:equality
+== 'aL'
+	write _ R
+	scan R until (end) or (== 'aR') or (== 'bR')
+	== 'aR'
+		write _ L
+		scan L until (== 'aL') or (== 'bL')
+		goto equality
+	end
+		accept
+	reject
+== 'bL'
+	write _ R
+	scan R until (begin) or (== 'aR') or (== 'bR')
+	== 'bR'
+		write _ L
+		scan L until (== 'aL') or (== 'bL')
+		goto equality
+	begin
+		accept
+	reject
+accept
+	
+
+accepts ww in {a,b}*
+
+semantics:
+	goto labels (not just line numbers) denoted by :<name> where name is not reserved
+	conditional expressions denoted by raw boolean exprs (any pairwise thing like equals that only defines one side means to compare the defined side with the current read)
+	~~scope brackets allow for multiline conditionals (as well as indentation?)~~
+	raw L/R statements indicate single unconditioned movements L or R
+	end and begin are basically flags (they evaluate to true/false) telling the machine whether it's at the beginning/end of the string
+
+note the difference between the scan statement on line 12 and on line 18 (no end on 18): this means if it hits the end/beginning before that condition is true the string is rejected
+
+this machine is a 'level 1 machine' in that it uses no abstract syntax referencing other machines or leaving interpretation up to semantics. Essentially, this is just one step up from listing the states and transitions (which would be level 0 and should be supported)
+
+____
+
+(built in machine which matches string x to regex re; accepts if match, rejects if no match; this could also <and should> be done with finite control)
+match(x,re)
+
+abc(x)
+	:entry
+	!match(x,'a*b*c*')
+		reject
+	match(x,'')
+		accept
+	scan R until == 'a'
+	write _ R
+	scan R until == 'b'
+	write _ R
+	scan R until == 'c'
+	write _ L
+	scan L until == 'b'
+	write _ L
+	scan L until == 'a'
+	write _ R
+	goto entry
+
+
+accepts a^nb^nc^n
+
+semantics:
+	"abc(x)" says this machine is called abc and its input (actually just the current value of the tape) is called x (more useful for universal tms and more abstract syntax)
+	"scan {L,R} until <boolean expr>" moves the machine in that direction until that statement is true (it moves back to the read head position that caused it to become true). if it reaches and endmarker before that happens, it automatically rejects
+	"write <char expr> {L,R}" changes the current char (under the read head) to whatever the expression evals to. **char exprs can actually be more than one char (to allow compount things like a-uptick)**
+	if the condition specified for scan is already met when the scan begins, it doesn't do anything to the read head's position (could set a flag though)
+
+this is a level 2 machine, since it references another machine (and so requires universal machine access)
+
+-----
+
+abstract syntax (would also need to define some more middle layers before getting here properly)
+
+M(x):
+	...definition of TM M with input x
+
+x = ...definition of x
+
+halting_reducer(y)
+	tf = M(x)
+	accept
+
+
+this is our syntax for the typical machine used for hp reductions. note  the assignment of the variable tf to the true/false return from M on input x, which were previously defined
+
+the assignment to variables makes this a level 3 machine
+
+____
+
+
+want a compiler down to bytecode (python is probably fine here) then something which can execute that bytecode (need speed so c/c++)

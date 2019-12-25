@@ -1,0 +1,140 @@
+FOR SINGLE TAPE MACHINES
+bytecode needs to encode the entire tuple (and is basically <M>):
+	(Q,Sigma,Gamma,left end,blank,delta,s,t,r)
+	states	< implicit in transition function
+	alphabet
+	tape alphabet
+	beginning marker < universal constant (all 0s or something) [also universal right endmarker]
+	blank < universal constant
+	transition function
+	start state
+	accept state < universal constant
+	reject state < universal constant
+
+	so in reality just
+	alphabet
+	tape alphabet (just for compression sake)
+	transition function
+	start state
+
+encoding needs to start with <(|Gamma| + 3)><|Q| + 2> so we know how wide the numbers will be. these can be 32 bit unsigned ints (the + 3 is for the blank, the left endmarker, and the right endmarker)
+
+alphabet:
+	will consist of a map from utf 8 literals onto numbers (width determined by the size of the alphabet)
+	so if we have in the input alphabet {a,b,c}, which are in utf 8 0x{61,62,63} we would encode them in that order as bytes 0x61, 0x62, 0x63
+	ordering determines mapping onto integers, so 'a' maps to 0x61 which maps to 0b000 when there are, say, 2 more tape symbols not counted here (all the symbols must be the same width)
+
+tape alphabet:
+	same story, map from utf 8 literals onto numbers, but with the first n reserved for the alphabet (since tape alphabet is a superset)
+
+should these ^^ be inferred?
+
+transition function:
+	transitions in TMs look like "from state q, reading symbol A from the tape, write symbol B and move left or right"
+	in other words, we need (q,A,B,D in {L,R})
+	if there are n states we will need n+2 (for the accept and reject states) total numbers to represent them, which makes their width floor(log2(n + 1) + 1)
+	max value is the accept state, max value - 1 is reject
+
+	symbols just use their referents as defined above
+
+	L or R is a single bit (0 for L, 1 for R) at the end
+
+	transitions are then listed as
+		<state from><read><state to><write><dir>
+
+	so if we have a machine M which has 5 total states (including accept and reject) and 8 total tape symbols (a,b,c,ah,bh,blank,begin,end), with a transition from state 0 to state 1 reading symbol 'a', writing symbol 'ah', and moving right after, the encoding should be:
+		000			0000 		001			0011 		1
+		state 0		symbol 0	state 1		symbol 3	R
+
+		or 000000000100111
+
+		(note the difference in width for symbols and states. this is perfectly fine)
+
+		we don't need to actually write doen the from state though since it's implicit in the table ordering, so just write
+
+		0000 001 0011 1
+		or 000000100111
+
+		neither do we need to write down the read symbol, since the table is just a double for loop traversal (for each state go through each symbol in the same order every time)
+
+		so just write
+
+		001 0011 1
+		or 00100111
+
+do all of this big endian because I've decided to not go totally insane again
+
+now we can do the whole encoding of a machine
+
+let M be:
+	|Q| = 2 (+2 is 4)
+	Sigma = {a,b}
+	Gamma = {a,b,ah,bh}
+	tf =
+
+			a	|	b	|	ah	|	bh	|	_	|	begin		|	end
+	   -----------------------------------------------------------------
+	p |	(r,ah,R)|(q,b,R)|(t,a,R)|(r,b,R)|(p,a,L)| (p,begin,R)	| (p,end,L)
+	q |	(t,ah,L)|(q,b,L)|(t,a,R)|(r,b,L)|(p,b,L)| (q,begin,R)	| (q,end,L)
+
+we encode this as:
+<7>	(encoding of)
+<4>
+<a><b>
+DELIM
+<ah><bh>
+DELIM
+(p's transitions)
+110 010 1
+001 001 1
+111 000 1
+110 001 1
+000 000 0
+000 110 1
+000 111 0
+(q's)
+111 010 0
+001 001 0
+111 000 1
+110 001 0
+000 001 0
+001 110 1
+001 111 0
+
+that's all folks
+
+final encoding:
+
+00000000000000000000000000000111
+00000000000000000000000000000100
+01100001 01100010
+00000001
+11000011 10100010 11000110 10000000
+00000001
+110 010 1
+001 001 1
+111 000 1
+110 001 1
+000 000 0
+000 110 1
+000 111 0
+111 010 0
+001 001 0
+111 000 1
+110 001 0
+000 001 0
+001 110 1
+001 111 0
+
+all mooshed
+
+00000000 00000000 00000000 00000111
+00000000 00000000 00000000 00000100
+01100001 01100010 00000001 11000011
+10100010 11000110 10000000 00000001
+11001010 01001111 10001110 00110000
+00000011 01000111 01110100 00100101
+11000111 00010000 00100011 10100111
+10
+
+(then pad with whatever since the machine won't read past here anyway)
