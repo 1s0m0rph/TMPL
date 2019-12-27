@@ -162,8 +162,13 @@ class Parser:
 
 		return None
 
-	def get_line_indent(self):
-		m = re.match(r'\s*',self.lines[self.lindex])
+	def get_line_indent(self,lindex=None):
+		if lindex is None:
+			lindex = self.lindex
+
+		if (lindex < 0) or (lindex >= len(self.lines)):
+			return 0
+		m = re.match(r'\s*',self.lines[lindex])
 		return len(m.group(0))
 
 	def read_line(self):
@@ -223,12 +228,16 @@ class Parser:
 
 			#all else fails it has to be a conditional
 			bexp = self.parseBoolean(line)
+			indent_level =  self.get_line_indent()
+			if indent_level <= self.prev_indent:
+				raise SyntaxError("Expected indent after line: " + line)
 			#get the exprs for it
 			exprs = []
-			while (self.lindex < len(self.lines)) and (self.get_line_indent() >= self.prev_indent) and (not re.match(r'.*}.*',line)):
-				lparse = self.parseline()
-				if lparse:
-					exprs.append(lparse)
+			while (self.lindex < len(self.lines)) and (self.get_line_indent() >= indent_level):
+				if self.get_line_indent() == indent_level:#let each conditional do its own lines in parseline
+					lparse = self.parseline()
+					if lparse:
+						exprs.append(lparse)
 
 			return ConditionalExpr(bexp,exprs)
 
