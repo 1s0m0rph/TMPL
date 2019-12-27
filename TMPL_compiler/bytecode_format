@@ -50,7 +50,7 @@ transition function:
 
 		(note the difference in width for symbols and states. this is perfectly fine)
 
-		we don't need to actually write doen the from state though since it's implicit in the table ordering, so just write
+		we don't need to actually write down the from state though since it's implicit in the table ordering, so just write
 
 		0000 001 0011 1
 		or 000000100111

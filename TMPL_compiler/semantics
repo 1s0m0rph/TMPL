@@ -1,0 +1,79 @@
+<all semantics assume that the machine is currently in state q; unless otherwise mentioned also reading symbol a>
+
+if movement is not mentioned, a new state to reverse the movement done must be created (so if the default behavior is to move right, the new state must move left to counter it)
+
+LABEL(s)
+
+Associate the current state q with the label s
+
+CONDITIONAL(bexpr,expr*)
+
+Evaluate bexpr starting from q with true state T and false state F. Evaluate T as the beginning state for each expr_i. The last expr_i as well as F will have all transitions move to new state p, which is the beginning state for each expr after the conditional
+
+MOVEMENT
+
+MovementExpr(Direction) causes all transitions from the current state q to write the current symbol and move left, transitioning to new state p
+
+so for all transitions from state q, reading symbol a, the new transition will look like (p,a,D)
+
+SCAN
+
+WRITE(b)
+
+all transitions from q go to new state p, moving right, all from p go to new state r, moving left and writing what was written there before. All transitions from q write symbol b
+
+GOTO(p)
+
+Given the state corresponding to the label specified in the goto, all transitions from q go to new state r moving right and not writing, then from r to p moving left and not writing.
+
+ACCEPT
+
+all transitions from q go to t, writing blank and moving right
+
+REJECT
+
+all transitions from q go to r, writing blank and moving right
+
+BOOLEANS
+
+	for boolean exprs, T is the state moved to assuming the expression evals true, F if false
+
+	EQUAL(b)
+
+	all transitions from state q on symbols other than b go to new state F
+	transition from state q on symbol b goes to new state T
+
+	NOTEQUAL
+
+	all transitions from state q on symbols other than b go to new state T
+	transition from state q on symbol b goes to new state F
+
+	BEGIN
+
+	all transitions from state q on symbols other than BEGIN go to new state F
+	transition from state q on symbol BEGIN goes to new state T
+
+	END
+
+	all transitions from state q on symbols other than END go to new state T
+	transition from state q on symbol END goes to new state F
+
+	TRUE
+
+	all transitions from state q go to new state T
+
+	FALSE
+
+	all transitions from state q go to new state F
+
+	NOT(TT,FF)
+
+	given states TT and FF evaluated from base case booleans, create new states T and F such that all transitions from TT go to F and all from FF go to T
+
+	OR(p*,TT*,FF*)
+
+	given lists of states TTi and FFi evaluated from other boolean exprs (whose entry states are pi), create new states T and F such that all transitions from TTi go to T and all from FFi go in a list to the next pi, the last moving to F
+
+	AND(p*,TT*,FF*)
+
+	given lists of states TTi and FFi evaluated from other boolean exprs (whose entry states are pi), create new states T and F such that all transitions from FFi go to F and all from TTi go in a list to the next pi, the last moving to T
