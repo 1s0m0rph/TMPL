@@ -7,7 +7,7 @@ bytecode needs to encode the entire tuple (and is basically <M>):
 	beginning marker < universal constant (all 0s or something) [also universal right endmarker]
 	blank < universal constant
 	transition function
-	start state
+	start state < universal constant
 	accept state < universal constant
 	reject state < universal constant
 
@@ -15,7 +15,6 @@ bytecode needs to encode the entire tuple (and is basically <M>):
 	alphabet
 	tape alphabet (just for compression sake)
 	transition function
-	start state
 
 encoding needs to start with <(|Gamma| + 3)><|Q| + 2> so we know how wide the numbers will be. these can be 32 bit unsigned ints (the + 3 is for the blank, the left endmarker, and the right endmarker)
 

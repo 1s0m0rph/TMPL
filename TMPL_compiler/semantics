@@ -1,4 +1,6 @@
-<all semantics assume that the machine is currently in state q; unless otherwise mentioned also reading symbol a>
+all semantics assume that the machine is currently in state q; unless otherwise mentioned also reading symbol a
+
+thus, the first line's input state (q) is actually the start state s
 
 if movement is not mentioned, a new state to reverse the movement done must be created (so if the default behavior is to move right, the new state must move left to counter it)
 
@@ -16,7 +18,9 @@ MovementExpr(Direction) causes all transitions from the current state q to write
 
 so for all transitions from state q, reading symbol a, the new transition will look like (p,a,D)
 
-SCAN
+SCAN(dir,bexpr)
+
+cause q to become a scan incomplete state. all of q's transitions will go in the correct direction and will go to a new state p which will be the entry state for bexpr, which will have true state T and false state F. T's transitions will all go to new state C (the scan-complete state), neither moving nor writing. F's transitions will all go back to q, except for the one from END (if moving right) or BEGIN (if moving left), which will move to r
 
 WRITE(b)
 
