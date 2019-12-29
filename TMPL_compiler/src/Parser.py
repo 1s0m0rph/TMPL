@@ -12,6 +12,8 @@ class Parser:
 		self.lindex = 0
 		self.prev_indent = 0
 
+		self.alphabet_defined = False	#the first line defines the alphabet used for the machine, the tape alphabet is inferred
+
 
 	def get_within_first_open_paren(self, s:str):
 		parens = []  # stack of parens
@@ -188,19 +190,27 @@ class Parser:
 		if line:
 			label_re = re.match(r':(\S*)',line)
 			if label_re:
+				if not self.alphabet_defined:
+					raise SyntaxError("The first line must define the alphabet (e.g. 'ab' defines alphabet {'a','b'})")
 				return LabelExpr(label_re.group(1))
 
 			movement_re = re.match(r'[LR]',line)
 			if movement_re:
+				if not self.alphabet_defined:
+					raise SyntaxError("The first line must define the alphabet (e.g. 'ab' defines alphabet {'a','b'})")
 				dir = movement_re.group(0)
 				return self.parseDirection(dir)
 
 			goto_re = re.match(r'goto\s+(\S*)',line)
 			if goto_re:
+				if not self.alphabet_defined:
+					raise SyntaxError("The first line must define the alphabet (e.g. 'ab' defines alphabet {'a','b'})")
 				return GotoExpr(goto_re.group(1))
 
 			write_re = re.match(r'write\s+(?:["\']([^"\']+)["\']|_)\s+([LR])?',line)
 			if write_re:
+				if not self.alphabet_defined:
+					raise SyntaxError("The first line must define the alphabet (e.g. 'ab' defines alphabet {'a','b'})")
 				wst = write_re.group(1)
 				if wst is None:
 					writestr = Blank()
@@ -212,19 +222,31 @@ class Parser:
 
 			accept_re = re.match('accept',line)
 			if accept_re:
+				if not self.alphabet_defined:
+					raise SyntaxError("The first line must define the alphabet (e.g. 'ab' defines alphabet {'a','b'})")
 				return Accept()
 
 			reject_re = re.match('reject',line)
 			if reject_re:
+				if not self.alphabet_defined:
+					raise SyntaxError("The first line must define the alphabet (e.g. 'ab' defines alphabet {'a','b'})")
 				return Reject()
 
 			scan_re = re.match(r'scan\s+([LR])\s+until\s+(.*)',line)
 			if scan_re:
+				if not self.alphabet_defined:
+					raise SyntaxError("The first line must define the alphabet (e.g. 'ab' defines alphabet {'a','b'})")
 				mvdir = self.parseDirection(scan_re.group(1))
 				boolstr = scan_re.group(2)
 				bexp = self.parseBoolean(boolstr)
 
 				return Scan(mvdir,bexp)
+
+			if not self.alphabet_defined:
+				#then this line must define the alphabet
+				alph_str = re.match(r'(?:[^,],?)+',line).group(0)
+				self.alphabet_defined = True
+				return AlphabetExpr(list(alph_str))
 
 			#all else fails it has to be a conditional
 			bexp = self.parseBoolean(line)

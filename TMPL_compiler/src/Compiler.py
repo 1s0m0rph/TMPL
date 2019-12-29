@@ -121,6 +121,13 @@ class TM:
 		F = self.transition_function[dummyF][self.BLANK_CHAR][0]
 		return T,F
 
+	'''
+	Wire all of current_state's transitions into q without moving or writing
+	'''
+	def wire_to_silent(self,q:int):
+		qdummy = self.add_nomov(q)
+		self.transition_function[self.current_state] = {c:(qdummy,c,MOVE_RIGHT) for c in self.tape_alphabet}
+
 	def add_conditional(self,bexpr:BooleanExpr):
 		cond_body_start = self.get_next_state()	#this is the body of the conditional
 		cond_body_start_dummy = self.add_nomov(cond_body_start)
@@ -373,7 +380,109 @@ class TM:
 
 class Compiler:
 
-	def __init__(self):
-		pass
+	def __init__(self,exprs:List[Expr]):
+		self.exprs = exprs
 
-	#TODO: first thing we need to do is handle labels since prereferencing is allowed
+		self.labels = {}#mapping from label name (string) onto int (the state in the TM)
+		self.remaining_gotos = {}#which gotos have yet to be wired up? We're going to handle these last (map them to which state they correspond to in the TM)
+
+		self.M = None
+
+	def infer_tape_alphabet_extra_subexpr(self,expr:Expr) -> Set[str]:
+		ret = set()
+		for sub in expr.subExpr:
+			ret = ret.union(self.infer_tape_alphabet_extra_subexpr(sub))
+
+		if type(expr) == WriteExpr:#anything that actually gets written has to be done so in a write expr, so it's a syntax error if a symbol is ever mentioned in a scan or whatever that wasn't ever written
+			wstr = expr.subExpr[0].string
+			ret = ret.union({wstr})
+
+		return ret
+
+
+	'''
+	Take the union of all of the symbols referenced 
+	'''
+	def infer_tape_alphabet_extra(self):
+		alph = set(self.exprs[0].alpha)
+		for expr in self.exprs:
+			alph = alph.union(self.infer_tape_alphabet_extra_subexpr(expr))
+
+		return alph
+
+	def compile_remaining_gotos(self):
+		for gotexp in self.remaining_gotos:
+			self.M.current_state = self.remaining_gotos[gotexp]
+			self.M.add_goto(self.labels[gotexp.ident])
+
+	'''
+	we need to handle labels first since prereferencing is allowed
+	'''
+	def discover_gotos(self):
+		for expr in self.exprs:
+			if type(expr) == GotoExpr:
+				self.remaining_gotos.update({expr:None})
+			elif type(expr) == LabelExpr:
+				self.labels.update({expr.label:None})#nothing yet
+
+		for gtexp in self.remaining_gotos:
+			if gtexp.ident not in self.labels:
+				raise SyntaxError("Label " + gtexp.ident + " referenced without assignment.")
+
+	#TODO: after that we need to map symbols (so things like 'ah' get mapped to actual single utf8 symbols; probably with some rules) <do we really though?>
+
+	'''
+	wire_to tells us that we need to wire this one's output to some other state when we're done
+	'''
+	def compile_line(self,expr:Expr,wire_to=None):
+		#add the correct type into the TM
+		if type(expr) == MovementExpr:
+			self.M.current_state = self.M.add_movement(expr)
+		elif type(expr) == Scan:
+			self.M.current_state = self.M.add_scan(*expr.subExpr)
+		elif type(expr) == WriteExpr:
+			self.M.current_state = self.M.add_write(expr.subExpr[0].string)
+		elif type(expr) == Accept:
+			self.M.add_accept()
+		elif type(expr) == Reject:
+			self.M.add_reject()
+		elif type(expr) == LabelExpr:
+			if self.labels[expr.label] is not None:
+				raise SyntaxError("Label " + expr.label + " defined more than once.")
+			self.labels.update({expr.label:self.M.current_state})
+		elif type(expr) == GotoExpr:
+			if self.labels[expr.ident] is not None:
+				#then go ahead and link it up now
+				self.M.add_goto(self.labels[expr.ident])
+				self.remaining_gotos.pop(expr)
+			self.remaining_gotos[expr] = self.M.current_state
+		elif type(expr) == ConditionalExpr:
+			#bitchy one here
+			cond_body_start,cond_after = self.M.add_conditional(expr)
+			#start by parsing the body
+			self.M.current_state = cond_body_start
+			for i in range(len(expr.subExpr)-1):
+				self.compile_line(expr.subExpr[i])
+
+			#the last state here needs to fall back through to the after state
+			self.compile_line(expr.subExpr[-1],wire_to=cond_after)
+
+			#then set the state to the after state and keep moving
+			self.M.current_state = cond_after
+		else:
+			raise AttributeError("Unknown expression type: " + str(type(expr)) + " post-parsing (this shouldn't happen)")
+
+		if wire_to is not None:
+			#then this state (the machine's current state) needs to be wired up into the one specified
+			self.M.wire_to_silent(wire_to)
+
+
+	def create_TM_from_bytecode(self):
+		alphabet = self.exprs[0].alpha
+		tape_alphabet = self.infer_tape_alphabet_extra()
+		self.M = TM(alphabet,tape_alphabet)
+
+		self.exprs.pop(0)#get rid of the alphabet statement, we've parsed it
+
+		for expr in self.exprs:
+			self.compile_line(expr)

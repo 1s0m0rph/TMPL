@@ -1,5 +1,6 @@
 palindromes in {a,b}:
 
+ab
 :entry
 (== 'aR') or (== 'bR')
 	L

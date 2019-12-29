@@ -7,6 +7,11 @@ class Expr:
 	def __init__(self,subExpr:list):
 		self.subExpr = subExpr	#list of subexpressions
 
+class AlphabetExpr(Expr):
+	def __init__(self,alpha:List[str]):
+		super().__init__([])
+		self.alpha = alpha
+
 class LabelExpr(Expr):
 	def __init__(self,label:str):
 		super().__init__([])

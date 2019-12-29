@@ -112,6 +112,7 @@ class TestParser(TestCase):
 		reject""".split('\n')
 
 		p0 = Parser([stest0,stest1])
+		p0.alphabet_defined = True
 
 		res0 = p0.parseline()
 
@@ -119,6 +120,7 @@ class TestParser(TestCase):
 		assert(type(res0.subExpr[0]) == MovementLeft)
 
 		p1 = Parser([stest2,stest3,stest4,stest5,stest6,stest7,stest8])
+		p1.alphabet_defined = True
 
 		res2 = p1.parseline()
 		assert(res2 is None)
@@ -149,6 +151,7 @@ class TestParser(TestCase):
 		assert(type(res8.subExpr[1]) == MovementLeft)
 
 		p2 = Parser(stest9)
+		p2.alphabet_defined = True
 
 		res9 = p2.parseline()
 
@@ -164,7 +167,8 @@ class TestParser(TestCase):
 		assert(type(res9.subExpr[4]) == Reject)
 
 	def test_parse_all(self):
-		prog = """:entry
+		prog = """ab
+:entry
 (== 'aR') or (== 'bR')
 	L
 	goto equality
@@ -209,19 +213,20 @@ accept""".split('\n')
 
 		res = p.parse_all()
 
-		assert(type(res[0]) == LabelExpr)
-		assert(type(res[1]) == ConditionalExpr)
+		assert(type(res[0]) == AlphabetExpr)
+		assert(type(res[1]) == LabelExpr)
 		assert(type(res[2]) == ConditionalExpr)
 		assert(type(res[3]) == ConditionalExpr)
-		assert(type(res[4]) == Scan)
-		assert(type(res[5]) == MovementLeft)
-		assert(type(res[6]) == ConditionalExpr)
+		assert(type(res[4]) == ConditionalExpr)
+		assert(type(res[5]) == Scan)
+		assert(type(res[6]) == MovementLeft)
 		assert(type(res[7]) == ConditionalExpr)
-		assert(type(res[8]) == Scan)
-		assert(type(res[9]) == MovementRight)
-		assert(type(res[10]) == GotoExpr)
-		assert(type(res[11]) == LabelExpr)
-		assert(type(res[12]) == ConditionalExpr)
+		assert(type(res[8]) == ConditionalExpr)
+		assert(type(res[9]) == Scan)
+		assert(type(res[10]) == MovementRight)
+		assert(type(res[11]) == GotoExpr)
+		assert(type(res[12]) == LabelExpr)
 		assert(type(res[13]) == ConditionalExpr)
-		assert(type(res[14]) == Accept)
-		assert(len(res) == 15)
+		assert(type(res[14]) == ConditionalExpr)
+		assert(type(res[15]) == Accept)
+		assert(len(res) == 16)
