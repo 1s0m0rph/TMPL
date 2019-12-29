@@ -92,8 +92,8 @@ class TM:
 		self.tape_alphabet = tape_alphabet.union(alphabet)
 		self.tape_alphabet = self.tape_alphabet.union({self.BEGIN_MARKER,self.END_MARKER,self.BLANK_CHAR})
 		self.transition_function = {START:{},
-									ACCEPT:{c:(ACCEPT,BLANK,MOVE_RIGHT) for c in self.tape_alphabet},
-									REJECT:{c:(REJECT,BLANK,MOVE_RIGHT) for c in self.tape_alphabet}
+									ACCEPT:{c:(ACCEPT,self.BLANK_CHAR,MOVE_RIGHT) for c in self.tape_alphabet},
+									REJECT:{c:(REJECT,self.BLANK_CHAR,MOVE_RIGHT) for c in self.tape_alphabet}
 									}#maps states onto maps from symbols to transition tuples (to state,write symbol,direction)
 
 		#logical stuff
@@ -117,8 +117,8 @@ class TM:
 
 	def get_TF_from_dummy(self,p:int):
 		dummyF,dummyT = self.TF_assoc[p]
-		T = self.transition_function[dummyF][BLANK][0]
-		F = self.transition_function[dummyT][BLANK][0]
+		T = self.transition_function[dummyT][self.BLANK_CHAR][0]
+		F = self.transition_function[dummyF][self.BLANK_CHAR][0]
 		return T,F
 
 	def add_conditional(self,bexpr:BooleanExpr):
@@ -255,19 +255,19 @@ class TM:
 
 	def add_boolean_equal(self,sym:str,dummyT:int,dummyF:int):
 		self.transition_function[self.current_state] = {c:(dummyF,c,MOVE_RIGHT) for c in self.tape_alphabet}
-		self.transition_function[self.current_state].update({sym:dummyT})
+		self.transition_function[self.current_state].update({sym:(dummyT,sym,MOVE_RIGHT)})
 
 	def add_boolean_notequal(self,sym:str,dummyT:int,dummyF:int):
 		self.transition_function[self.current_state] = {c:(dummyT,c,MOVE_RIGHT) for c in self.tape_alphabet}
-		self.transition_function[self.current_state].update({sym:dummyF})
+		self.transition_function[self.current_state].update({sym:(dummyF,sym,MOVE_RIGHT)})
 
 	def add_boolean_begin(self,dummyT:int,dummyF:int):
 		self.transition_function[self.current_state] = {c:(dummyF,c,MOVE_RIGHT) for c in self.tape_alphabet}
-		self.transition_function[self.current_state].update({self.BEGIN_MARKER:dummyT})
+		self.transition_function[self.current_state].update({self.BEGIN_MARKER:(dummyT,self.BEGIN_MARKER,MOVE_RIGHT)})
 
 	def add_boolean_end(self,dummyT:int,dummyF:int):
 		self.transition_function[self.current_state] = {c:(dummyF,c,MOVE_RIGHT) for c in self.tape_alphabet}
-		self.transition_function[self.current_state].update({self.END_MARKER:dummyT})
+		self.transition_function[self.current_state].update({self.END_MARKER:(dummyT,self.END_MARKER,MOVE_RIGHT)})
 
 	def add_boolean_true(self,dummyT:int,dummyF:int):
 		self.transition_function[self.current_state] = {c:(dummyT,c,MOVE_RIGHT) for c in self.tape_alphabet}
@@ -276,44 +276,68 @@ class TM:
 		self.transition_function[self.current_state] = {c:(dummyF,c,MOVE_RIGHT) for c in self.tape_alphabet}
 
 	def add_boolean_not(self,dummyT:int,dummyF:int,src:int):
-		src_dummyF, src_dummyT = self.TF_assoc[src]
-		self.transition_function[src_dummyT] = {c:(dummyF,c,MOVE_RIGHT) for c in self.tape_alphabet}
-		self.transition_function[src_dummyF] = {c:(dummyT,c,MOVE_RIGHT) for c in self.tape_alphabet}
+		src_dummy = self.add_nomov(src)
+		self.transition_function[self.current_state] = {c:(src_dummy,c,MOVE_RIGHT) for c in self.tape_alphabet}
+
+		src_T,src_F = self.get_TF_from_dummy(src)
+		self.transition_function[src_T] = {c:(dummyF,c,MOVE_RIGHT) for c in self.tape_alphabet}
+		self.transition_function[src_F] = {c:(dummyT,c,MOVE_RIGHT) for c in self.tape_alphabet}
 
 	def add_boolean_or(self,dummyT:int,dummyF:int,srcs:List[int]):
+		#add the entry point in
+		src_dummy = self.add_nomov(srcs[0])
+		self.transition_function[self.current_state] = {c:(src_dummy,c,MOVE_RIGHT) for c in self.tape_alphabet}
+
 		for i,src in enumerate(srcs):
 			src_dummyF, src_dummyT = self.TF_assoc[src]
-			src_T = self.transition_function[src_dummyF][BLANK][0]#all transitions go to this node, so we'll just use the blank transition
-			src_F = self.transition_function[src_dummyT][BLANK][0]
+			src_T = self.transition_function[src_dummyT][self.BLANK_CHAR][0]#all transitions go to this node, so we'll just use the blank transition
+			src_F = self.transition_function[src_dummyF][self.BLANK_CHAR][0]
 
 			self.transition_function[src_T] = {c:(dummyT,c,MOVE_RIGHT) for c in self.tape_alphabet}
 			if i == len(srcs) - 1:
 				#then this needs to go to F
 				self.transition_function[src_F] = {c:(dummyF,c,MOVE_RIGHT) for c in self.tape_alphabet}
 			else:
-				#then chain it along to the next one
-				self.transition_function[src_F] = {c:(srcs[i+1],c,MOVE_RIGHT) for c in self.tape_alphabet}
+				#then chain it along to the next one's dummy state
+				src_dummy = self.add_nomov(srcs[i+1])
+				self.transition_function[src_F] = {c:(src_dummy,c,MOVE_RIGHT) for c in self.tape_alphabet}
 
 	def add_boolean_and(self,dummyT:int,dummyF:int,srcs:List[int]):
+		#add the entry point in
+		src_dummy = self.add_nomov(srcs[0])
+		self.transition_function[self.current_state] = {c:(src_dummy,c,MOVE_RIGHT) for c in self.tape_alphabet}
+
 		for i,src in enumerate(srcs):
 			src_dummyF,src_dummyT = self.TF_assoc[src]
-			src_T = self.transition_function[src_dummyF][BLANK][0]  #all transitions go to this node, so we'll just use the blank transition
-			src_F = self.transition_function[src_dummyT][BLANK][0]
+			src_T = self.transition_function[src_dummyT][self.BLANK_CHAR][0]  #all transitions go to this node, so we'll just use the blank transition
+			src_F = self.transition_function[src_dummyF][self.BLANK_CHAR][0]
 
 			self.transition_function[src_F] = {c:(dummyF,c,MOVE_RIGHT) for c in self.tape_alphabet}
 			if i == len(srcs)-1:
 				#then this needs to go to T
 				self.transition_function[src_T] = {c:(dummyT,c,MOVE_RIGHT) for c in self.tape_alphabet}
 			else:
-				#then chain it along to the next one
-				self.transition_function[src_T] = {c:(srcs[i+1],c,MOVE_RIGHT) for c in self.tape_alphabet}
+				#then chain it along to the next one's dummy state
+				src_dummy = self.add_nomov(srcs[i+1])
+				self.transition_function[src_T] = {c:(src_dummy,c,MOVE_RIGHT) for c in self.tape_alphabet}
 
 
 	"""
 	Code for simulating this TM (mostly for debugging purposes, but the effect is that this language is effectively runnable interpreted)
 	"""
 
-	def simulate(self,inp:str,verbose=False,include_endmarker=True):
+	'''
+	nsteps allows the TM to be simulated for only a certain number of steps
+	ret_config set to true means that simulate will return the full current TM config as opposed to a simple 'yes' or 'no'
+	'''
+	def simulate(self,inp:str,verbose=False,include_endmarker=True,nsteps=-1,ret_config=False):
+		def end_check(current_state,step_count):
+			if nsteps != -1:
+				if step_count >= nsteps:
+					return False
+
+			return current_state not in [ACCEPT,REJECT]
+
 		if include_endmarker:
 			tape = list(self.BEGIN_MARKER + inp + self.END_MARKER)#list because it's easier
 		else:
@@ -321,7 +345,8 @@ class TM:
 		read_head_loc = 1	#index on the tape
 		current_state = START
 
-		while current_state not in [ACCEPT,REJECT]:
+		step_count = 0
+		while end_check(current_state,step_count):
 			read_symbol = tape[read_head_loc]
 			to_state,write_sym,dir = self.transition_function[current_state][read_symbol]
 			tape[read_head_loc] = write_sym
@@ -338,8 +363,12 @@ class TM:
 				print(' '*read_head_loc + '^')
 
 			current_state = to_state
+			step_count += 1
 
-		return current_state == ACCEPT
+		if ret_config:
+			return tape,read_head_loc,current_state
+		else:
+			return current_state == ACCEPT
 
 
 class Compiler:
