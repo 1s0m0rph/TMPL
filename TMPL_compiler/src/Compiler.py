@@ -173,9 +173,9 @@ class TM:
 		#except for END/BEGIN, which are different
 		if mvd == MOVE_LEFT:
 			#then the begin transition needs to reject
-			self.transition_function[F].update({self.BEGIN_MARKER:REJECT})
+			self.transition_function[F].update({self.BEGIN_MARKER:(REJECT,self.BEGIN_MARKER,MOVE_RIGHT)})
 		else:
-			self.transition_function[F].update({self.END_MARKER:REJECT})
+			self.transition_function[F].update({self.END_MARKER:(REJECT,self.END_MARKER,MOVE_RIGHT)})
 
 		return scan_complete
 
@@ -393,7 +393,7 @@ class Compiler:
 		for sub in expr.subExpr:
 			ret = ret.union(self.infer_tape_alphabet_extra_subexpr(sub))
 
-		if type(expr) == WriteExpr:#anything that actually gets written has to be done so in a write expr, so it's a syntax error if a symbol is ever mentioned in a scan or whatever that wasn't ever written
+		if issubclass(type(expr),WriteExpr):#anything that actually gets written has to be done so in a write expr, so it's a syntax error if a symbol is ever mentioned in a scan or whatever that wasn't ever written
 			wstr = expr.subExpr[0].string
 			ret = ret.union({wstr})
 
@@ -415,50 +415,59 @@ class Compiler:
 			self.M.current_state = self.remaining_gotos[gotexp]
 			self.M.add_goto(self.labels[gotexp.ident])
 
+	def discover_gotos_subexpr(self,expr:Expr):
+		if issubclass(type(expr),GotoExpr):
+			self.remaining_gotos.update({expr:None})
+		elif issubclass(type(expr),LabelExpr):
+			self.labels.update({expr.label:None})  #nothing yet
+
+		for subexpr in expr.subExpr:
+			self.discover_gotos_subexpr(subexpr)
+
 	'''
 	we need to handle labels first since prereferencing is allowed
 	'''
 	def discover_gotos(self):
 		for expr in self.exprs:
-			if type(expr) == GotoExpr:
-				self.remaining_gotos.update({expr:None})
-			elif type(expr) == LabelExpr:
-				self.labels.update({expr.label:None})#nothing yet
+			self.discover_gotos_subexpr(expr)
 
 		for gtexp in self.remaining_gotos:
 			if gtexp.ident not in self.labels:
 				raise SyntaxError("Label " + gtexp.ident + " referenced without assignment.")
 
-	#TODO: after that we need to map symbols (so things like 'ah' get mapped to actual single utf8 symbols; probably with some rules) <do we really though?>
+	#TODO: we need to map symbols (so things like 'ah' get mapped to actual single utf8 symbols; probably with some rules) <do we really though?>
 
 	'''
 	wire_to tells us that we need to wire this one's output to some other state when we're done
 	'''
 	def compile_line(self,expr:Expr,wire_to=None):
 		#add the correct type into the TM
-		if type(expr) == MovementExpr:
+		if issubclass(type(expr),MovementExpr):
 			self.M.current_state = self.M.add_movement(expr)
-		elif type(expr) == Scan:
+		elif issubclass(type(expr),Scan):
 			self.M.current_state = self.M.add_scan(*expr.subExpr)
-		elif type(expr) == WriteExpr:
+		elif issubclass(type(expr),WriteExpr):
 			self.M.current_state = self.M.add_write(expr.subExpr[0].string)
-		elif type(expr) == Accept:
+			if len(expr.subExpr) == 2:#i.e. there's a movement specified after
+				self.M.current_state = self.M.add_movement(expr.subExpr[1])
+		elif issubclass(type(expr),Accept):
 			self.M.add_accept()
-		elif type(expr) == Reject:
+		elif issubclass(type(expr),Reject):
 			self.M.add_reject()
-		elif type(expr) == LabelExpr:
+		elif issubclass(type(expr),LabelExpr):
 			if self.labels[expr.label] is not None:
 				raise SyntaxError("Label " + expr.label + " defined more than once.")
 			self.labels.update({expr.label:self.M.current_state})
-		elif type(expr) == GotoExpr:
+		elif issubclass(type(expr),GotoExpr):
 			if self.labels[expr.ident] is not None:
 				#then go ahead and link it up now
 				self.M.add_goto(self.labels[expr.ident])
 				self.remaining_gotos.pop(expr)
-			self.remaining_gotos[expr] = self.M.current_state
-		elif type(expr) == ConditionalExpr:
+			else:
+				self.remaining_gotos[expr] = self.M.current_state
+		elif issubclass(type(expr),ConditionalExpr):
 			#bitchy one here
-			cond_body_start,cond_after = self.M.add_conditional(expr)
+			cond_body_start,cond_after = self.M.add_conditional(expr.condition)
 			#start by parsing the body
 			self.M.current_state = cond_body_start
 			for i in range(len(expr.subExpr)-1):
@@ -472,17 +481,38 @@ class Compiler:
 		else:
 			raise AttributeError("Unknown expression type: " + str(type(expr)) + " post-parsing (this shouldn't happen)")
 
-		if wire_to is not None:
+		if (wire_to is not None) and not((issubclass(type(expr),GotoExpr)) or (issubclass(type(expr),Accept)) or (issubclass(type(expr),Reject))):#since gotos go elsewhere, they shouldn't be wired up like this
 			#then this state (the machine's current state) needs to be wired up into the one specified
 			self.M.wire_to_silent(wire_to)
 
 
-	def create_TM_from_bytecode(self):
+
+	def compile_to_TM(self):
 		alphabet = self.exprs[0].alpha
 		tape_alphabet = self.infer_tape_alphabet_extra()
 		self.M = TM(alphabet,tape_alphabet)
-
 		self.exprs.pop(0)#get rid of the alphabet statement, we've parsed it
+
+		self.discover_gotos()
 
 		for expr in self.exprs:
 			self.compile_line(expr)
+
+		self.compile_remaining_gotos()
+
+		#check to make sure everything got wired up right
+		for state in range(-3,len(self.M.transition_function)-3):
+			if state not in self.M.transition_function:
+				raise SyntaxError("Incomplete TM; some transitions were not defined (for state" + str(state) + ".")
+			for sym in self.M.tape_alphabet:
+				if sym not in self.M.transition_function[state]:
+					raise SyntaxError("Incomplete TM; no defined transition for symbol " + sym + " at state " + str(state))
+
+				trans = self.M.transition_function[state][sym]
+				try:
+					a,b,c = trans
+					assert(type(a) == int)
+					assert(type(b) == str)
+					assert((c == MOVE_LEFT) or (c == MOVE_RIGHT))
+				except:
+					raise AttributeError("There's something wrong with the code: it's assigning the transitions wrong for state " + str(state) + " on symbol " + sym + " (transition functino evals to " + str(trans) + ")")

@@ -93,10 +93,18 @@ class Parser:
 			st = String(eq_re.group(1))
 			return Equal(st)
 
+		eq_blank_re = re.match(r'=\s*=\s*_$',boolstr)
+		if eq_blank_re:
+			return Equal(Blank())
+
 		neq_re = re.match(r'!\s*=\s*["\']([^"\']*)["\']$',boolstr)
 		if neq_re:
 			st = String(neq_re.group(1))
 			return NotEqual(st)
+
+		neq_blank_re = re.match(r'!\s*=\s*_$',boolstr)
+		if neq_blank_re:
+			return NotEqual(Blank())
 
 		begin_re = re.match('begin$',boolstr)
 		if begin_re:

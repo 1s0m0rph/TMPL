@@ -14,7 +14,7 @@ L
 == 'a'
 	write 'aR' L
 == 'b'
-	write 'aR' L
+	write 'bR' L
 scan L until (== 'aL') or (== 'bL')
 R
 goto entry

@@ -43,6 +43,7 @@ class TestParser(TestCase):
 		stest2 = "!=   'b' and (!!='asdf' or end)"
 		stest3 = "true or =='b' or begin or (!end)"
 		stest4 = "(end) or (== 'aR') or = = 'bR'"
+		stest5 = "== _"
 
 		p = Parser([])
 
@@ -51,6 +52,7 @@ class TestParser(TestCase):
 		r2 = p.parseBoolean(stest2)
 		r3 = p.parseBoolean(stest3)
 		r4 = p.parseBoolean(stest4)
+		r5 = p.parseBoolean(stest5)
 
 		assert(type(r0) == BooleanOrExpr)
 		assert(type(r0.subExpr[0]) == Equal)
@@ -84,6 +86,9 @@ class TestParser(TestCase):
 
 		assert(type(r4) == BooleanOrExpr)
 
+		assert(type(r5) == Equal)
+		assert(type(r5.subExpr[0]) == Blank)
+
 	def test_get_line_indent(self):
 		stest = '\t\t  \t asdf\t\t#comment here'
 		p = Parser([stest])
@@ -110,6 +115,7 @@ class TestParser(TestCase):
 		end
 			accept
 		reject""".split('\n')
+		stest10 = 'scan L until != _'
 
 		p0 = Parser([stest0,stest1])
 		p0.alphabet_defined = True
@@ -165,6 +171,15 @@ class TestParser(TestCase):
 		assert(type(res9.subExpr[3]) == ConditionalExpr)
 		assert(type(res9.subExpr[3].subExpr[0]) == Accept)
 		assert(type(res9.subExpr[4]) == Reject)
+
+		p3 = Parser([stest10])
+		p3.alphabet_defined = True
+
+		res10 = p3.parseline()
+
+		assert(type(res10) == Scan)
+		assert(type(res10.subExpr[0]) == MovementLeft)
+		assert(type(res10.subExpr[1]) == NotEqual)
 
 	def test_parse_all(self):
 		prog = """ab
