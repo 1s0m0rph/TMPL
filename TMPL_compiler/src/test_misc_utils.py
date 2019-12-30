@@ -11,8 +11,10 @@ class TestMiscUtils(TestCase):
 		assert(int_to_binstr(-4,3) == '100')
 		assert(int_to_binstr(-1,5) == '11111')
 		assert(int_to_binstr(5,4) == '0101')
+		assert(int_to_binstr(-3,8) == '11111101')
 		self.assertRaises(AttributeError,int_to_binstr,1,1)
 		self.assertRaises(AttributeError,int_to_binstr,5,3)
+		self.assertRaises(AttributeError,int_to_binstr,110,7)
 
 	def test_complement_binstr(self):
 		assert(complement_binstr('0010') == '1101')

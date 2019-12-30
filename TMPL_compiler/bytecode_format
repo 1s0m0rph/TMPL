@@ -78,10 +78,9 @@ let M be:
 
 we encode this as:
 <7>	(encoding of)
-<4>
-<a><b>
+<a>|<b>
 DELIM
-<ah><bh>
+<ah>|<bh>
 DELIM
 (p's transitions)
 110 010 1
@@ -137,3 +136,5 @@ all mooshed
 10
 
 (then pad with whatever since the machine won't read past here anyway)
+
+also include stuff like level/version info (e.g. is this multitape?)

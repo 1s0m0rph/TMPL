@@ -7,7 +7,9 @@ from typing import Set
 import numpy as np
 from Syntax import *
 
-FIELD_DELIM = '00011111'	#read as utf 8 char 32 (unit separator)
+VERSION = 0					#32bit version id (determines things like multitape, level, etc.)
+FIELD_DELIM = '00011101'	#read as utf 8 char 30/0x1D (group separator)
+CHAR_DELIM = '00011111'		#read as utf 8 char 32 (unit separator)
 START = -1					#in 2's complement, -1, or all 1s
 ACCEPT = -2					#in 2's complement, -2, or all 1s except the lowest bit
 REJECT = -3
@@ -45,13 +47,9 @@ def complement_binstr(bst:str):
 '''
 Convert an int to a 2's complement string of equivalent value, with given width
 '''
-def int_to_binstr(i:int,w:int):
-	if i < 0:
-		if int(np.floor(np.log2(-i) + 1)) > w:
-			raise AttributeError("Width insufficient to fit entire number")
-	else:
-		if int(np.floor(np.log2(i) + 2)) > w:
-			raise AttributeError("Width insufficient to fit entire number")
+def int_to_binstr(i:int,w:int,signed=True):
+	if signed_width_of(i) > w:
+		raise AttributeError("Width insufficient to fit entire number")
 
 	neg_flag = False
 	if i < 0:
@@ -77,6 +75,14 @@ def int_to_binstr(i:int,w:int):
 		bst = increment_binstr(complement_binstr(bst))
 
 	return bst
+
+def signed_width_of(i:int) -> int:
+	if i < 0:
+		return int(np.floor(np.log2(-i) + 1))
+	elif i == 0:
+		return 0
+	else:
+		return int(np.floor(np.log2(i) + 2))
 
 """
 Abstract representation of a TM with functions to build it up incrementally
@@ -516,3 +522,117 @@ class Compiler:
 					assert((c == MOVE_LEFT) or (c == MOVE_RIGHT))
 				except:
 					raise AttributeError("There's something wrong with the code: it's assigning the transitions wrong for state " + str(state) + " on symbol " + sym + " (transition functino evals to " + str(trans) + ")")
+
+"""
+Given a (compiled) TM, encode it into bytes
+"""
+class Encoder:
+
+	INT_WIDTH = 32
+
+	def __init__(self,M:TM):
+
+		self.M = M
+
+		self.encoding = ''		#byte string (maybe list of bytes?)
+
+		self.states = list(self.M.transition_function.keys())
+		self.alphabet = list(self.M.alphabet)
+		self.tape_alphabet = list(self.M.tape_alphabet - set(self.M.alphabet))
+		#lists for all of these so order never changes
+
+		self.state_encoding_width = max(3,signed_width_of(len(self.states)))
+		self.symbol_encoding_width = max(3,signed_width_of(len(self.tape_alphabet) + len(self.alphabet)))
+
+		self.symbol_index_map = {TM.BLANK_CHAR:BLANK,
+								 TM.BEGIN_MARKER:LEFT_ENDMARKER,
+								 TM.END_MARKER:RIGHT_ENDMARKER}#maps symbols onto the ints which represent them
+
+	def encode_full_width_int(self,i:int):
+		self.encoding += int_to_binstr(i,self.INT_WIDTH,signed=False)
+
+	'''
+	Includes preprocessing ints (version, number of states)
+	'''
+	def encode_preprocessor_ints(self):
+		self.encode_full_width_int(VERSION)
+		self.encode_full_width_int(len(self.states))
+
+	'''
+	encodes the input and tape alphabets. Chars within these are separated by CHAR_DELIM, and they're separated from each other by FIELD_DELIM 
+	'''
+	def encode_alphabets(self):
+		symbol_index_counter = 0
+		for i in range(0,len(self.alphabet)):
+			if self.alphabet[i] not in self.symbol_index_map:
+				self.symbol_index_map.update({self.alphabet[i]:symbol_index_counter})
+				symbol_index_counter += 1
+			sym = map(bin,bytearray(self.alphabet[i],'utf-8'))
+			for ch in sym:
+				ch = ch[2:]	#all of these strings start with '0b', drop that
+				#pad its length
+				while len(ch) < 8:
+					ch = '0' + ch
+				self.encoding += ch
+
+			if i != len(self.alphabet) - 1:
+				self.encoding += CHAR_DELIM
+
+		self.encoding += FIELD_DELIM
+		#now do the tape alpha (where it differs from the input)
+		for i in range(len(self.tape_alphabet)):
+			rsym = self.tape_alphabet[i]
+			if rsym not in self.symbol_index_map:
+				self.symbol_index_map.update({rsym:symbol_index_counter})
+				symbol_index_counter += 1
+			sym = map(bin,bytearray(rsym,'utf-8'))
+			for ch in sym:
+				ch = ch[2:]  #all of these strings start with '0b', drop that
+				#pad its length
+				while len(ch) < 8:
+					ch = '0'+ch
+				self.encoding += ch
+
+			if i != len(self.tape_alphabet) - 1:
+				self.encoding += CHAR_DELIM
+
+		self.encoding += FIELD_DELIM	#so we know we're done reading the alphabets
+
+	def encode_single_transition(self,from_state:int,on_symbol:str):
+		to_state,write_symbol,move_dir = self.M.transition_function[from_state][on_symbol]
+		self.encoding += int_to_binstr(to_state,self.state_encoding_width)
+		self.encoding += int_to_binstr(self.symbol_index_map[write_symbol],self.symbol_encoding_width)
+		self.encoding += '0' if move_dir == MOVE_LEFT else '1'
+
+	def encode_transition_function(self):
+		for state in self.states:
+			for sym in self.alphabet:
+				self.encode_single_transition(state,sym)
+
+			#separate loop because they're disjoint
+			for sym in self.tape_alphabet:
+				self.encode_single_transition(state,sym)
+
+	def encode(self):
+		self.encode_preprocessor_ints()
+		self.encode_alphabets()
+		self.encode_transition_function()
+
+	def convert_encoding_to_byte_array(self):
+		#pad with zeroes
+		while len(self.encoding) % 8 != 0:
+			self.encoding += '0'
+
+		bar = []
+		for i in range(0,len(self.encoding),8):
+			byte = self.encoding[i:i+8]
+			bar.append(int(byte,2))
+
+		return bytearray(bar)
+
+	def write_to_file(self,fname:str):
+		if len(self.encoding) == 0:
+			self.encode()
+		bar = self.convert_encoding_to_byte_array()
+		with open(fname,'wb') as f:
+			f.write(bar)
