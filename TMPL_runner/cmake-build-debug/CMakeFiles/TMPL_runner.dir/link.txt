@@ -1,0 +1,1 @@
+/usr/bin/c++  -g   CMakeFiles/TMPL_runner.dir/main.cpp.o CMakeFiles/TMPL_runner.dir/TM.cpp.o CMakeFiles/TMPL_runner.dir/FileReader.cpp.o  -o TMPL_runner 
